@@ -1,31 +1,19 @@
 ---
 deployment:
   tasks:
-    # 1) Carpeta donde quieres la app en producción (TU ruta)
+    # Ruta base del proyecto (repositorio)
     - export DEPLOYPATH="/home/concr/repositories/concre-app"
 
-    # 2) Copiar el código desde el repo a la carpeta de despliegue (excluye lo innecesario)
-    - /bin/rsync -a --delete \
-        --exclude ".git" \
-        --exclude ".github" \
-        --exclude ".cpanel.yml" \
-        --exclude "node_modules" \
-        --exclude "tests" \
-        ./ $DEPLOYPATH/
+    # Instalar dependencias
+    - /opt/cpanel/composer/bin/composer --working-dir=${DEPLOYPATH} install --no-dev --optimize-autoloader
 
-    # 3) Entrar a la carpeta de la app
-    - cd $DEPLOYPATH
+    # Comandos Laravel (ajusta la versión PHP si no es 8.2)
+    - /opt/cpanel/ea-php82/root/usr/bin/php ${DEPLOYPATH}/artisan storage:link || true
+    - /opt/cpanel/ea-php82/root/usr/bin/php ${DEPLOYPATH}/artisan migrate --force
+    - /opt/cpanel/ea-php82/root/usr/bin/php ${DEPLOYPATH}/artisan optimize:clear
+    - /opt/cpanel/ea-php82/root/usr/bin/php ${DEPLOYPATH}/artisan config:cache
+    - /opt/cpanel/ea-php82/root/usr/bin/php ${DEPLOYPATH}/artisan route:cache
+    - /opt/cpanel/ea-php82/root/usr/bin/php ${DEPLOYPATH}/artisan view:cache
 
-    # 4) Instalar dependencias de PHP (Composer de cPanel)
-    - /opt/cpanel/composer/bin/composer install --no-dev --optimize-autoloader
-
-    # 5) Enlaces/optimizaciones de Laravel (usa la versión de PHP que tengas)
-    - /opt/cpanel/ea-php82/root/usr/bin/php artisan storage:link || true
-    - /opt/cpanel/ea-php82/root/usr/bin/php artisan migrate --force
-    - /opt/cpanel/ea-php82/root/usr/bin/php artisan optimize:clear
-    - /opt/cpanel/ea-php82/root/usr/bin/php artisan config:cache
-    - /opt/cpanel/ea-php82/root/usr/bin/php artisan route:cache
-    - /opt/cpanel/ea-php82/root/usr/bin/php artisan view:cache
-
-    # 6) Permisos típicos
-    - /bin/chmod -R ug+rw storage bootstrap/cache
+    # Permisos
+    - /bin/chmod -R ug+rw ${DEPLOYPATH}/storage ${DEPLOYPATH}/bootstrap/cache
