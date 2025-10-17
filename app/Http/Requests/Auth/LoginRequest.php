@@ -1,0 +1,91 @@
+<?php
+
+namespace App\Http\Requests\Auth;
+
+use App\Models\User;
+use Illuminate\Auth\Events\Lockout;
+use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Validation\ValidationException;
+use Illuminate\Support\Str;
+
+
+
+class LoginRequest extends FormRequest
+{
+    /**
+     * Determine if the user is authorized to make this request.
+     */
+    public function authorize(): bool
+    {
+        return true;
+    }
+
+    /**
+     * Get the validation rules that apply to the request.
+     *
+     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
+     */
+    public function rules(): array
+    {
+        return [
+            'login' => ['required', 'string'],
+            'password' => ['required', 'string'],
+            'role' => ['required', 'string', 'in:cliente,proveedor,empleado'],
+        ];
+    }
+
+    /**
+     * Attempt to authenticate the request's credentials.
+     *
+     * @throws \Illuminate\Validation\ValidationException
+     */
+    public function authenticate(): void
+    {
+        $this->ensureIsNotRateLimited();
+
+        $login    = trim($this->string('login')->toString());
+        $password = $this->string('password')->toString();
+        $remember = (bool) $this->boolean('remember');
+
+        // 1) Si es email, usa Auth::attempt (maneja hashing automáticamente)
+        if (filter_var($login, FILTER_VALIDATE_EMAIL)) {
+            if (! Auth::attempt(['email' => $login, 'password' => $password], $remember)) {
+                RateLimiter::hit($this->throttleKey());
+                throw ValidationException::withMessages(['login' => __('auth.failed')]);
+            }
+            RateLimiter::clear($this->throttleKey());
+            return;
+        }
+
+        // 2) Si NO es email, buscar por users.identificacion
+        /** @var User|null $user */
+        $user = User::query()->where('identificacion', $login)->first();
+
+        if (! $user || ! Hash::check($password, $user->password)) {
+            RateLimiter::hit($this->throttleKey());
+            throw ValidationException::withMessages(['login' => __('auth.failed')]);
+        }
+
+        Auth::login($user, $remember);
+        RateLimiter::clear($this->throttleKey());
+    }
+
+    public function throttleKey(): string
+    {
+        return Str::lower($this->input('login')).'|'.$this->ip();
+    }
+
+    protected function ensureIsNotRateLimited(): void
+    {
+        if (! RateLimiter::tooManyAttempts($this->throttleKey(), 5)) return;
+
+        event(new Lockout($this));
+        $seconds = RateLimiter::availableIn($this->throttleKey());
+        throw ValidationException::withMessages([
+            'login' => trans('auth.throttle', ['seconds'=>$seconds, 'minutes'=>ceil($seconds/60)]),
+        ]);
+    }
+}
