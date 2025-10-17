@@ -38,6 +38,6 @@ require __DIR__.'/Core/core.php';
 
 /** Areas */
 // GTH
-require __DIR__.'/areas/gth/empleados.php';
+require __DIR__.'/Areas/GTH/empleados.php';
 // PCM
-require __DIR__.'/areas/pcm/pcm.php';
+require __DIR__.'/Areas/PCM/pcm.php';
