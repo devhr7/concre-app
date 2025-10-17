@@ -2,7 +2,7 @@
 deployment:
   tasks:
     # 1) Carpeta donde quieres la app en producción (TU ruta)
-    - export DEPLOYPATH="/home/concr/cloud.concretol.co"
+    - export DEPLOYPATH="/home/concr/repositories/concre-app"
 
     # 2) Copiar el código desde el repo a la carpeta de despliegue (excluye lo innecesario)
     - /bin/rsync -a --delete \
