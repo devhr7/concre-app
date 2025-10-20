@@ -1,21 +1,52 @@
 ---
 deployment:
   tasks:
-    - export APP="/home/concr/repositories/concre-app"
-    - export PHP="/opt/cpanel/ea-php82/root/usr/bin/php"
-    - export COMPOSER="/opt/cpanel/composer/bin/composer"
+    # --- variables ---
+    - export APP_DIR="/home/concr/repositories/concre-app"
+    # Cambia esto SI tu docroot es diferente
+    # OJO: si en cPanel configuraste el docroot del subdominio directamente a /home/concr/repositories/concre-app/public,
+    # deja DOCROOT exactamente así:
+    - export DOCROOT="/home/concr/repositories/concre-app/public"
 
-    # Instalar dependencias
-    - $COMPOSER --working-dir=$APP install --no-dev --optimize-autoloader
+    # Si en lugar de eso usas un docroot separado (ej. /home/concr/cloud.concretolima.co), cámbialo arriba
+    # - export DOCROOT="/home/concr/cloud.concretolima.co"
 
-    # Configurar Laravel
-    - $PHP $APP/artisan key:generate --force
-    - $PHP $APP/artisan migrate --force
-    - $PHP $APP/artisan storage:link || true
-    - $PHP $APP/artisan optimize:clear
-    - $PHP $APP/artisan config:cache
-    - $PHP $APP/artisan route:cache
-    - $PHP $APP/artisan view:cache
+    # --- asegurar Node en PATH (ajusta según tu servidor) ---
+    - if [ -d /opt/cpanel/ea-nodejs22/bin ]; then export PATH="/opt/cpanel/ea-nodejs22/bin:$PATH"; fi
+    - if [ -d /opt/cpanel/ea-nodejs20/bin ]; then export PATH="/opt/cpanel/ea-nodejs20/bin:$PATH"; fi
+    - if [ -d "$HOME/.nodevenv/app/bin" ]; then export PATH="$HOME/.nodevenv/app/bin:$PATH"; fi
 
-    # Permisos
-    - chmod -R ug+rw $APP/storage $APP/bootstrap/cache
+    # --- entrar al repo ---
+    - cd "$APP_DIR"
+
+    # --- permisos Laravel mínimos ---
+    - /bin/find storage -type d -exec chmod 775 {} \;
+    - /bin/find bootstrap/cache -type d -exec chmod 775 {} \;
+
+    # --- backend PHP (si aplica Laravel) ---
+    - if command -v php >/dev/null 2>&1; then
+        if [ -f composer.json ]; then
+          if command -v composer >/dev/null 2>&1; then composer install --no-dev --prefer-dist --no-interaction --optimize-autoloader; fi;
+          php artisan storage:link || true;
+          php artisan migrate --force || true;
+          php artisan config:cache || true;
+          php artisan route:cache || true;
+          php artisan view:cache || true;
+        fi;
+      fi
+
+    # --- frontend (Vite) ---
+    - if command -v npm >/dev/null 2>&1; then npm ci --ignore-scripts; npm run build; else echo "npm no disponible en servidor"; fi
+
+    # --- publicar al DOCROOT ---
+    # Si el DOCROOT ES exactamente el /public del repo, NO hagas rsync (evita copiarse a sí mismo):
+    - if [ "$DOCROOT" = "$APP_DIR/public" ]; then
+        echo "DOCROOT == APP_DIR/public → no se hace rsync (el build ya quedó en public).";
+      else
+        /bin/rsync -rltgoD --delete \
+          --exclude=".git" --exclude="node_modules" --exclude="vendor" \
+          "$APP_DIR/public/" "$DOCROOT/";
+      fi
+
+    # --- health check simple ---
+    - /bin/ls -lah "$DOCROOT" | head -n 50 || true
