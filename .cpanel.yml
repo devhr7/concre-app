@@ -1,19 +1,25 @@
 ---
 deployment:
   tasks:
-    # Ruta base del proyecto (repositorio)
-    - export DEPLOYPATH="/home/concr/repositories/concre-app"
+    - export APP="/home/concr/repositories/concre-app"
+    - export PHP="/opt/cpanel/ea-php82/root/usr/bin/php"
+    - export COMPOSER="/opt/cpanel/composer/bin/composer"
+    - export PATH="$HOME/.nvm/versions/node/v18.19.0/bin:$PATH"   # ajusta la ruta según tu node
 
-    # Instalar dependencias
-    - /opt/cpanel/composer/bin/composer --working-dir=${DEPLOYPATH} install --no-dev --optimize-autoloader
+    # Backend
+    - $COMPOSER --working-dir=$APP install --no-dev --optimize-autoloader
 
-    # Comandos Laravel (ajusta la versión PHP si no es 8.2)
-    - /opt/cpanel/ea-php82/root/usr/bin/php ${DEPLOYPATH}/artisan storage:link || true
-    - /opt/cpanel/ea-php82/root/usr/bin/php ${DEPLOYPATH}/artisan migrate --force
-    - /opt/cpanel/ea-php82/root/usr/bin/php ${DEPLOYPATH}/artisan optimize:clear
-    - /opt/cpanel/ea-php82/root/usr/bin/php ${DEPLOYPATH}/artisan config:cache
-    - /opt/cpanel/ea-php82/root/usr/bin/php ${DEPLOYPATH}/artisan route:cache
-    - /opt/cpanel/ea-php82/root/usr/bin/php ${DEPLOYPATH}/artisan view:cache
+    # Frontend (Vite)
+    - cd $APP
+    - npm ci
+    - npm run build
+
+    # Laravel post-build
+    - $PHP $APP/artisan storage:link || true
+    - $PHP $APP/artisan optimize:clear
+    - $PHP $APP/artisan config:cache
+    - $PHP $APP/artisan route:cache
+    - $PHP $APP/artisan view:cache
 
     # Permisos
-    - /bin/chmod -R ug+rw ${DEPLOYPATH}/storage ${DEPLOYPATH}/bootstrap/cache
+    - chmod -R ug+rw $APP/storage $APP/bootstrap/cache
